@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TimeKeeper</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:       #f8fafc;
+      --surface:  #ffffff;
+      --border:   #e5e7eb;
+      --border-lt:#f3f4f6;
+      --text:     #111827;
+      --text-2:   #6b7280;
+      --text-3:   #9ca3af;
+      --indigo:   #4f46e5;
+      --indigo-l: #eef2ff;
+      --indigo-m: #c7d2fe;
+      --red:      #dc2626;
+      --header:   #0f172a;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body.child-mode { font-size: 105%; }
+    body.child-mode .mm-d { font-size: 0.65rem; }
+    body.child-mode .d-n  { font-size: 0.95rem; width: 30px; height: 30px; }
+
+    /* ── HEADER ── */
+    .header {
+      height: 58px; background: var(--header);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-size: 0.95rem; font-weight: 700; color: #fff; letter-spacing: 0.06em; text-transform: uppercase; }
+    .logo-dot { color: #818cf8; }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .header-meta  { text-align: right; line-height: 1.5; }
+    #live-date    { font-size: 0.7rem;  color: #94a3b8; }
+    #tz-str       { font-size: 0.68rem; color: #4b5563; }
+    #live-clock   { font-size: 1.6rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: -0.06em; }
+    .user-pill    { display: flex; align-items: center; gap: 9px; }
+    .user-avatar  { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg,#4f46e5,#7c3aed); color: #fff; font-size: 0.75rem; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,0.15); }
+    .user-name    { font-size: 0.78rem; font-weight: 600; color: #cbd5e1; }
+    .btn-signout  { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); color: #64748b; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .13s, color .13s; }
+    .btn-signout:hover { background: rgba(255,255,255,0.12); color: #94a3b8; }
+    .btn-gear { width: 32px; height: 32px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); border-radius: 8px; cursor: pointer; color: #94a3b8; display: none; align-items: center; justify-content: center; transition: background .13s, color .13s; flex-shrink: 0; }
+    .btn-gear:hover { background: rgba(255,255,255,0.13); color: #e2e8f0; }
+    .btn-gear.visible { display: flex; }
+
+    /* ── WRAP ── */
+    .wrap { max-width: 900px; margin: 0 auto; padding: 0 16px 64px; }
+
+    /* ── TABS ── */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); margin-top: 20px; overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border: none; background: none; font-size: 0.8rem; font-weight: 600; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .14s, border-color .14s; white-space: nowrap; letter-spacing: .01em; }
+    .tab:hover  { color: var(--text); }
+    .tab.active { color: var(--indigo); border-bottom-color: var(--indigo); }
+    .tab svg    { flex-shrink: 0; }
+
+    /* ── TOOLBAR ── */
+    .toolbar { display: flex; align-items: center; padding: 16px 0 14px; gap: 6px; }
+    .btn-outline { height: 31px; padding: 0 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 7px; cursor: pointer; font-size: .78rem; font-weight: 600; color: var(--text); display: inline-flex; align-items: center; transition: border-color .13s, color .13s; font-family: inherit; }
+    .btn-outline:hover { border-color: var(--indigo); color: var(--indigo); }
+    .btn-icon { width: 31px; height: 31px; border: 1px solid var(--border); background: var(--surface); border-radius: 7px; cursor: pointer; font-size: 1rem; color: var(--text-2); display: inline-flex; align-items: center; justify-content: center; transition: border-color .13s, color .13s; font-family: inherit; }
+    .btn-icon:hover { border-color: var(--indigo); color: var(--indigo); }
+    .nav-heading { margin-left: 4px; }
+    .nav-title   { font-size: 1.1rem; font-weight: 800; letter-spacing: -.3px; }
+    .nav-sub     { font-size: .7rem; color: var(--text-3); margin-top: 1px; }
+    .drag-hint { font-size: .7rem; color: var(--text-3); margin-left: auto; display: none; }
+    .drag-hint.show { display: block; }
+
+    /* ── CALENDAR CARD ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; animation: fadeIn .18s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── YEAR ── */
+    .year-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+    @media (max-width:620px) { .year-grid { grid-template-columns: repeat(2,1fr); } }
+    .mini-month { padding: 11px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; transition: all .14s; }
+    .mini-month:hover  { border-color: var(--indigo-m); background: var(--indigo-l); }
+    .mini-month.is-cur { border-color: var(--indigo);   background: var(--indigo-l); }
+    .mm-name { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-2); text-align: center; margin-bottom: 8px; }
+    .mini-month.is-cur .mm-name { color: var(--indigo); }
+    .mm-grid { display: grid; grid-template-columns: repeat(7,1fr); text-align: center; }
+    .mm-dh { font-size: .52rem; font-weight: 700; color: var(--text-3); padding-bottom: 3px; }
+    .mm-d { font-size: .58rem; padding: 1.5px 0; border-radius: 50%; }
+    .mm-d.td { background: var(--indigo); color: #fff; font-weight: 700; }
+    .mm-d.wk { color: var(--red); }
+    .mm-d.td.wk { color: #fff; }
+    .mm-d.oth { color: #d1d5db; }
+
+    /* ── MONTH ── */
+    .month-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+    .col-h { text-align: center; font-size: .67rem; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding-bottom: 10px; }
+    .m-day { min-height: 68px; padding: 7px; border-radius: 9px; cursor: pointer; border: 1px solid transparent; transition: background .12s, border-color .12s; user-select: none; }
+    .m-day:hover     { background: var(--indigo-l); border-color: var(--indigo-m); }
+    .m-day.oth       { opacity: .22; cursor: default; pointer-events: none; }
+    .m-day.wk .d-n   { color: var(--red); }
+    .m-day.td .d-n   { background: var(--indigo); color: #fff !important; }
+    .m-day.drag-sel  { background: #eef2ff; border-color: #818cf8 !important; }
+    .d-n { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; font-size: .83rem; font-weight: 600; }
+    .m-marks { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+    .m-mark { display: block; padding: 1px 5px; border-radius: 3px; font-size: .6rem; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; line-height: 1.55; transition: opacity .12s; }
+    .m-mark:hover { opacity: .78; }
+    .m-more { font-size: .58rem; color: var(--text-3); padding-left: 3px; font-weight: 600; margin-top: 1px; }
+    @media (max-width:460px) { .m-day { min-height: 44px; padding: 5px 3px; } }
+
+    /* ── DAY ── */
+    .day-scroll { max-height: 540px; overflow-y: auto; scrollbar-width: thin; }
+    .h-row { display: flex; align-items: stretch; min-height: 50px; border-radius: 7px; cursor: pointer; transition: background .11s; user-select: none; }
+    .h-row:hover { background: var(--bg); }
+    .h-row.cur   { background: var(--indigo-l); }
+    .h-row.drag-sel { background: #eef2ff; }
+    .h-lbl { width: 62px; min-width: 62px; padding: 14px 10px 14px 0; text-align: right; font-size: .7rem; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+    .h-lbl.cur { color: var(--indigo); }
+    .h-body { flex: 1; border-left: 1px solid var(--border-lt); padding: 10px 14px; position: relative; display: flex; align-items: center; gap: 6px; }
+    .h-row.cur .h-body { border-left: 2px solid var(--indigo); }
+    .t-dot { position: absolute; left: -5px; top: 50%; transform: translateY(-50%); width: 8px; height: 8px; background: var(--indigo); border-radius: 50%; box-shadow: 0 0 0 2px var(--indigo-l); }
+    .t-line { position: absolute; left: 3px; right: 0; top: 50%; height: 1px; background: var(--indigo); opacity: .25; transform: translateY(-50%); }
+    .h-mark-bar { width: 4px; height: 20px; border-radius: 2px; flex-shrink: 0; cursor: pointer; transition: transform .12s; }
+    .h-mark-bar:hover { transform: scaleY(1.3); }
+
+    /* ── HOUR ── */
+    .hour-scroll { max-height: 540px; overflow-y: auto; scrollbar-width: thin; }
+    .min-row { display: flex; align-items: center; padding: 5px 8px; border-radius: 7px; gap: 12px; transition: background .11s; }
+    .min-row:hover { background: var(--bg); }
+    .min-row.cur   { background: var(--indigo); color: #fff; }
+    .min-lbl { width: 78px; min-width: 78px; font-size: .77rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .min-bg  { flex: 1; height: 4px; background: var(--border-lt); border-radius: 2px; overflow: hidden; }
+    .min-fill { height: 100%; background: var(--indigo); border-radius: 2px; transition: width 1s linear; }
+    .min-row.cur .min-bg   { background: rgba(255,255,255,.22); }
+    .min-row.cur .min-fill { background: rgba(255,255,255,.85); }
+
+    /* ── SCROLLBARS ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+    /* ════════════════════════════════════════
+       SETTINGS PANEL
+    ════════════════════════════════════════ */
+    #settings-overlay {
+      display: none; position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,.28); backdrop-filter: blur(2px);
+    }
+    #settings-panel {
+      display: none; position: fixed; top: 0; right: 0; bottom: 0; z-index: 301;
+      width: 340px; max-width: 100vw;
+      background: var(--surface); border-left: 1px solid var(--border);
+      flex-direction: column; box-shadow: -8px 0 32px rgba(0,0,0,.1);
+    }
+    #settings-panel.open { display: flex; animation: spSlide .22s ease; }
+    @keyframes spSlide { from { transform:translateX(100%); } to { transform:translateX(0); } }
+    .sp-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .sp-title { font-size: .93rem; font-weight: 800; letter-spacing: -.2px; }
+    .sp-close { width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border); background: none; cursor: pointer; color: var(--text-2); display: flex; align-items: center; justify-content: center; font-family: inherit; font-size: 1rem; transition: all .13s; }
+    .sp-close:hover { background: var(--bg); color: var(--text); }
+    .sp-body { flex: 1; overflow-y: auto; padding-bottom: 32px; }
+    .sp-section { padding: 20px 20px 0; }
+    .sp-section + .sp-section { border-top: 1px solid var(--border-lt); margin-top: 20px; padding-top: 20px; }
+    .sp-section-title { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--text-3); margin-bottom: 14px; }
+    .sp-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+    .sp-field label { font-size: .72rem; font-weight: 600; color: var(--text-2); }
+    .sp-input { padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: .88rem; color: var(--text); background: var(--bg); outline: none; font-family: inherit; transition: border-color .14s, box-shadow .14s; }
+    .sp-input:focus { border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(79,70,229,.1); background: #fff; }
+    .sp-choice-row { display: flex; gap: 6px; }
+    .sp-choice-btn { flex: 1; padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--bg); font-size: .82rem; font-weight: 600; color: var(--text-2); cursor: pointer; font-family: inherit; transition: all .13s; }
+    .sp-choice-btn.sel { border-color: var(--indigo); background: var(--indigo-l); color: var(--indigo); }
+    .sp-choice-btn:hover:not(.sel) { border-color: var(--indigo-m); color: var(--text); }
+    .sp-save-btn { width: 100%; padding: 10px; border: none; border-radius: 9px; background: var(--indigo); color: #fff; font-size: .85rem; font-weight: 700; cursor: pointer; font-family: inherit; transition: background .13s; margin-top: 4px; }
+    .sp-save-btn:hover { background: #4338ca; }
+    .sp-cat-row { padding: 10px; background: var(--bg); border-radius: 9px; margin-bottom: 8px; border: 1px solid var(--border-lt); }
+    .sp-cat-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .sp-cat-input { flex: 1; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 7px; font-size: .84rem; color: var(--text); background: #fff; outline: none; font-family: inherit; transition: border-color .13s; }
+    .sp-cat-input:focus { border-color: var(--indigo); }
+    .sp-cat-del { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: none; cursor: pointer; color: var(--text-3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .13s; }
+    .sp-cat-del:hover { background: #fef2f2; border-color: #fca5a5; color: var(--red); }
+    .pal-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .pal-swatch { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2.5px solid transparent; transition: transform .12s, border-color .12s; outline: 2px solid transparent; outline-offset: 1px; }
+    .pal-swatch:hover { transform: scale(1.2); }
+    .pal-swatch.sel { outline-color: #374151; transform: scale(1.1); }
+    .sp-add-cat-btn { margin-top: 4px; width: 100%; padding: 9px; border: 1.5px dashed var(--border); border-radius: 9px; background: none; font-size: .82rem; font-weight: 600; color: var(--text-3); cursor: pointer; font-family: inherit; transition: all .13s; }
+    .sp-add-cat-btn:hover { border-color: var(--indigo-m); color: var(--indigo); background: var(--indigo-l); }
+
+    /* ════════════════════════════════════════
+       MARKING MODAL
+    ════════════════════════════════════════ */
+    #mark-modal {
+      display: none; position: fixed; inset: 0; z-index: 400;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    #mark-modal.open { display: flex; }
+    .mm-bg { position: absolute; inset: 0; background: rgba(0,0,0,.32); backdrop-filter: blur(3px); }
+    .mm-box { position: relative; z-index: 1; background: var(--surface); border-radius: 16px; padding: 24px; width: 100%; max-width: 380px; box-shadow: 0 24px 64px rgba(0,0,0,.2); animation: fadeIn .18s ease; }
+    .mm-title { font-size: 1rem; font-weight: 800; letter-spacing: -.2px; margin-bottom: 3px; }
+    .mm-range { font-size: .78rem; color: var(--text-2); margin-bottom: 16px; }
+    .mm-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); margin-bottom: 8px; }
+    .mm-cats { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; max-height: 220px; overflow-y: auto; }
+    .cat-btn { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--bg); cursor: pointer; font-size: .84rem; font-weight: 600; color: var(--text); font-family: inherit; text-align: left; transition: all .13s; }
+    .cat-btn:hover { background: var(--indigo-l); border-color: var(--indigo-m); }
+    .cat-btn.sel { background: var(--indigo-l); }
+    .cat-swatch-lg { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; }
+    .mm-note { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 9px; font-size: .85rem; font-family: inherit; color: var(--text); resize: none; height: 60px; outline: none; background: var(--bg); transition: border-color .14s; margin-bottom: 14px; }
+    .mm-note:focus { border-color: var(--indigo); background: #fff; }
+    .mm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .mm-btn-cancel { padding: 8px 16px; border: 1px solid var(--border); background: var(--bg); border-radius: 8px; font-size: .82rem; font-weight: 600; color: var(--text-2); cursor: pointer; font-family: inherit; transition: all .13s; }
+    .mm-btn-cancel:hover { border-color: var(--text-3); color: var(--text); }
+    .mm-btn-save { padding: 8px 20px; border: none; border-radius: 8px; background: var(--indigo); color: #fff; font-size: .82rem; font-weight: 700; cursor: pointer; font-family: inherit; transition: background .13s; }
+    .mm-btn-save:hover { background: #4338ca; }
+    .mm-hint { font-size: .71rem; color: var(--red); min-height: 16px; margin-bottom: 8px; }
+    .mm-time-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .mm-time-sel { flex: 1; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 9px; font-size: .84rem; font-family: inherit; color: var(--text); background: var(--bg); outline: none; cursor: pointer; transition: border-color .14s; }
+    .mm-time-sel:focus { border-color: var(--indigo); }
+    .mm-time-sep { font-size: .9rem; color: var(--text-3); flex-shrink: 0; }
+    .mm-btn-del { padding: 8px 14px; border: 1px solid #fca5a5; background: #fef2f2; border-radius: 8px; font-size: .82rem; font-weight: 600; color: var(--red); cursor: pointer; font-family: inherit; transition: all .13s; margin-right: auto; }
+    .mm-btn-del:hover { background: #fee2e2; border-color: var(--red); }
+
+    /* ── Confirm modal ── */
+    #conf-modal { display: none; position: fixed; inset: 0; z-index: 500; align-items: center; justify-content: center; padding: 20px; }
+    #conf-modal.open { display: flex; }
+    .conf-bg { position: absolute; inset: 0; background: rgba(0,0,0,.38); backdrop-filter: blur(3px); }
+    .conf-box { position: relative; z-index: 1; background: var(--surface); border-radius: 14px; padding: 22px 24px; width: 100%; max-width: 320px; box-shadow: 0 16px 48px rgba(0,0,0,.2); animation: fadeIn .15s ease; }
+    .conf-msg { font-size: .88rem; color: var(--text); line-height: 1.55; margin-bottom: 18px; }
+    .conf-btn-ok { padding: 8px 20px; border: none; border-radius: 8px; background: var(--red); color: #fff; font-size: .82rem; font-weight: 700; cursor: pointer; font-family: inherit; transition: background .13s; }
+    .conf-btn-ok:hover { background: #b91c1c; }
+
+    /* ── Hour-view markings banner ── */
+    .hr-markings { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .hr-mark-banner { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 9px; font-size: .82rem; font-weight: 600; color: var(--text); cursor: pointer; border-left: 3px solid transparent; transition: opacity .13s; }
+    .hr-mark-banner:hover { opacity: .75; }
+    .hr-mark-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ════════════════════════════════════════
+       LAUNCH / AUTH / PERSONALIZATION
+    ════════════════════════════════════════ */
+    #launch {
+      position: fixed; inset: 0; z-index: 999;
+      background: linear-gradient(160deg, #f0f4ff 0%, #e8e1ff 55%, #ddd6fe 100%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; overflow: hidden;
+      transition: opacity .5s ease, transform .5s ease;
+    }
+    #launch.hide { opacity: 0; transform: scale(1.03); pointer-events: none; }
+
+    .l-blob { position: absolute; border-radius: 50%; filter: blur(90px); pointer-events: none; }
+    .l-blob-1 { width: 500px; height: 500px; background: #c7d2fe; opacity: .55; top: -160px; right: -160px; }
+    .l-blob-2 { width: 380px; height: 380px; background: #ddd6fe; opacity: .5; bottom: -100px; left: -100px; }
+    .l-blob-3 { width: 260px; height: 260px; background: #a5f3fc; opacity: .18; top: 40%; left: 55%; }
+
+    #launch-content {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 380px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+
+    .l-fade { animation: lFade .25s ease; }
+    @keyframes lFade { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+    .launch-art { position: relative; width: 150px; height: 150px; margin-bottom: 28px; flex-shrink: 0; }
+    .la-ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(79,70,229,.3); animation: laRot 18s linear infinite; }
+    .la-ring::after { content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 8px; height: 8px; border-radius: 50%; background: #4f46e5; box-shadow: 0 0 14px 4px rgba(79,70,229,.5); }
+    @keyframes laRot { to { transform: rotate(360deg); } }
+    .la-card { position: absolute; inset: 18px; background: #1e1b4b; border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(79,70,229,.3), 0 4px 16px rgba(0,0,0,.2); }
+    .la-card-top { background: linear-gradient(135deg,#4f46e5,#7c3aed); padding: 8px 10px 6px; }
+    .la-card-month { font-size: .5rem; font-weight: 700; color: rgba(255,255,255,.65); text-transform: uppercase; letter-spacing: .1em; }
+    .la-card-day { font-size: 1.4rem; font-weight: 800; color: #fff; line-height: 1; margin-top: 1px; }
+    .la-card-grid { flex: 1; display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; padding: 6px; align-content: start; }
+    .la-c { aspect-ratio: 1; border-radius: 3px; }
+    .la-c.on  { background: rgba(99,102,241,.45); }
+    .la-c.hi  { background: #4f46e5; border-radius: 50%; }
+    .la-c.off { background: transparent; }
+
+    .launch-wordmark { font-size: 2.5rem; font-weight: 800; color: #1e1b4b; letter-spacing: -1px; line-height: 1; text-align: center; }
+    .launch-wordmark span { color: #4f46e5; }
+    .launch-tagline { margin-top: 8px; font-size: .87rem; color: #6366f1; text-align: center; }
+    .l-divider { width: 36px; height: 2px; background: linear-gradient(90deg, transparent, #818cf8, transparent); margin: 22px 0; border-radius: 1px; }
+
+    .l-actions { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+    .btn-lg-p { width: 100%; padding: 13px; border: none; border-radius: 12px; background: #4f46e5; color: #fff; font-size: .92rem; font-weight: 700; cursor: pointer; font-family: inherit; transition: background .14s, transform .14s; box-shadow: 0 6px 20px rgba(79,70,229,.38); display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-lg-p:hover  { background: #4338ca; transform: translateY(-1px); }
+    .btn-lg-p:active { transform: translateY(0); }
+    .btn-lg-p:disabled { opacity: .65; cursor: not-allowed; transform: none; }
+    .btn-lg-s { width: 100%; padding: 12px; border: 1.5px solid #a5b4fc; border-radius: 12px; background: rgba(255,255,255,.75); color: #4338ca; font-size: .92rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .14s, border-color .14s, transform .14s; }
+    .btn-lg-s:hover { background: rgba(255,255,255,.95); border-color: #6366f1; transform: translateY(-1px); }
+    .l-footer { margin-top: 18px; font-size: .67rem; color: #818cf8; text-align: center; }
+
+    .auth-back { align-self: flex-start; background: none; border: none; color: #4f46e5; font-size: .8rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 0; margin-bottom: 22px; font-family: inherit; transition: opacity .13s; }
+    .auth-back:hover { opacity: .65; }
+    .auth-heading { font-size: 1.55rem; font-weight: 800; color: #1e1b4b; letter-spacing: -.4px; text-align: center; }
+    .auth-sub { font-size: .82rem; color: #6366f1; text-align: center; margin-top: 4px; margin-bottom: 22px; }
+    .auth-form { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: .73rem; font-weight: 700; color: #4338ca; letter-spacing: .02em; text-transform: uppercase; }
+    .field input { padding: 11px 13px; border: 1.5px solid #c7d2fe; border-radius: 10px; font-size: .9rem; color: #1e1b4b; background: rgba(255,255,255,.85); outline: none; transition: border-color .15s, box-shadow .15s, background .15s; font-family: inherit; }
+    .field input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.12); background: #fff; }
+    .field input::placeholder { color: #a5b4fc; }
+    .field.err input { border-color: #fca5a5; }
+    .field-err { font-size: .72rem; color: #dc2626; display: none; }
+    .field.err .field-err { display: block; }
+    .form-err { width: 100%; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 9px 12px; font-size: .78rem; color: #dc2626; display: none; }
+    .form-err.show { display: block; }
+    .auth-switch { margin-top: 14px; font-size: .78rem; color: #6b7280; text-align: center; }
+    .auth-switch button { background: none; border: none; color: #4f46e5; font-weight: 700; cursor: pointer; font-size: inherit; font-family: inherit; padding: 0; }
+    .auth-switch button:hover { text-decoration: underline; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+
+    .persona-wrap { width: 100%; display: flex; flex-direction: column; align-items: center; }
+
+    /* ── School setup wizard ── */
+    .sw-icon { font-size: 2.8rem; margin-bottom: 14px; }
+    .sw-date-block { width: 100%; display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
+    .sw-date-row { display: flex; align-items: center; gap: 8px; }
+    .sw-date-label { font-size: .72rem; font-weight: 700; color: #4338ca; letter-spacing: .06em; text-transform: uppercase; width: 44px; flex-shrink: 0; }
+    .sw-select { flex: 1; padding: 11px 10px; border: 1.5px solid #c7d2fe; border-radius: 10px; font-size: .88rem; color: #1e1b4b; background: rgba(255,255,255,.85); outline: none; font-family: inherit; cursor: pointer; transition: border-color .15s; }
+    .sw-select:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+    .sw-day-row { display: flex; gap: 7px; margin: 20px 0 4px; width: 100%; }
+    .sw-day-btn { flex: 1; padding: 11px 4px; border: 1.5px solid #c7d2fe; border-radius: 10px; background: rgba(255,255,255,.7); font-size: .82rem; font-weight: 700; color: #4338ca; cursor: pointer; font-family: inherit; transition: all .15s; }
+    .sw-day-btn:hover { border-color: #818cf8; background: rgba(255,255,255,.9); }
+    .sw-day-btn.sel { border-color: #4f46e5; background: #eef2ff; color: #4f46e5; box-shadow: 0 2px 8px rgba(79,70,229,.18); }
+    .sw-hint { font-size: .72rem; color: #dc2626; min-height: 16px; text-align: center; margin-bottom: 4px; width: 100%; }
+    .sw-added { font-size: .78rem; color: #6366f1; text-align: center; margin-bottom: 6px; }
+    .sw-divider { width: 36px; height: 2px; background: linear-gradient(90deg,transparent,#818cf8,transparent); margin: 18px 0; border-radius: 1px; }
+    .persona-top { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    .persona-skip { background: none; border: none; font-size: .78rem; font-weight: 600; color: #818cf8; cursor: pointer; font-family: inherit; padding: 0; transition: color .13s; }
+    .persona-skip:hover { color: #6366f1; }
+    .pp { display: flex; align-items: center; gap: 6px; }
+    .pp-d { height: 8px; border-radius: 4px; background: #c7d2fe; transition: all .3s ease; }
+    .pp-d.done   { width: 8px;  background: #4f46e5; }
+    .pp-d.active { width: 24px; background: #4f46e5; }
+    .pp-d.future { width: 8px;  background: #c7d2fe; }
+    .persona-q   { font-size: 1.45rem; font-weight: 800; color: #1e1b4b; text-align: center; letter-spacing: -.4px; line-height: 1.2; }
+    .persona-sub { font-size: .83rem; color: #6366f1; text-align: center; margin-top: 6px; margin-bottom: 24px; }
+    .persona-input { width: 100%; padding: 13px 16px; border: 1.5px solid #c7d2fe; border-radius: 12px; font-size: 1rem; color: #1e1b4b; background: rgba(255,255,255,.9); outline: none; transition: border-color .15s, box-shadow .15s; font-family: inherit; text-align: center; }
+    .persona-input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.12); background: #fff; }
+    .persona-input::placeholder { color: #a5b4fc; }
+    .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+    .choice-card { padding: 18px 12px; border: 1.5px solid #c7d2fe; border-radius: 14px; background: rgba(255,255,255,.7); cursor: pointer; text-align: center; transition: all .15s; user-select: none; }
+    .choice-card:hover { border-color: #818cf8; background: rgba(255,255,255,.9); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(79,70,229,.12); }
+    .choice-card.sel { border-color: #4f46e5; background: #eef2ff; transform: translateY(-2px); box-shadow: 0 4px 16px rgba(79,70,229,.18); }
+    .cc-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--indigo-l); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; transition: background .15s; }
+    .choice-card.sel .cc-icon { background: #c7d2fe; }
+    .cc-label { font-size: .9rem; font-weight: 700; color: #1e1b4b; }
+    .cc-desc  { font-size: .72rem; color: #818cf8; margin-top: 3px; }
+    .persona-actions { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 22px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Settings overlay + panel ── -->
+<div id="settings-overlay" onclick="closeSettings()"></div>
+<div id="settings-panel">
+  <div class="sp-header">
+    <span class="sp-title">Settings</span>
+    <button class="sp-close" onclick="closeSettings()">&#10005;</button>
+  </div>
+  <div class="sp-body" id="sp-body"></div>
+</div>
+
+<!-- ── Marking modal ── -->
+<div id="mark-modal">
+  <div class="mm-bg" onclick="closeMarkModal()"></div>
+  <div class="mm-box" id="mm-box"></div>
+</div>
+
+<!-- ── Confirm modal ── -->
+<div id="conf-modal">
+  <div class="conf-bg" onclick="closeConf()"></div>
+  <div class="conf-box">
+    <div class="conf-msg" id="conf-msg"></div>
+    <div class="mm-actions">
+      <button class="mm-btn-cancel" onclick="closeConf()">Cancel</button>
+      <button class="conf-btn-ok" id="conf-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Launch overlay ── -->
+<div id="launch">
+  <div class="l-blob l-blob-1"></div>
+  <div class="l-blob l-blob-2"></div>
+  <div class="l-blob l-blob-3"></div>
+  <div id="launch-content"></div>
+</div>
+
+<!-- ── App ── -->
+<header class="header">
+  <div class="logo">Time<span class="logo-dot">.</span>Keeper</div>
+  <div class="header-right">
+    <button class="btn-gear" id="gear-btn" onclick="openSettings()" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.3"/>
+        <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M2.929 2.929l1.06 1.06M12.01 12.01l1.061 1.061M2.929 13.071l1.06-1.06M12.01 3.99l1.061-1.06" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div id="user-pill" class="user-pill" style="display:none"></div>
+    <div class="header-meta">
+      <div id="live-date">—</div>
+      <div id="tz-str">—</div>
+    </div>
+    <div id="live-clock">--:--:--</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="tabs">
+    <button class="tab active" data-view="year" onclick="setView('year')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+        <rect x="0"   y="0"   width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity=".5"/>
+        <rect x="7.5" y="0"   width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity=".5"/>
+        <rect x="0"   y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity=".5"/>
+        <rect x="7.5" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity=".5"/>
+      </svg>
+      Year
+    </button>
+    <button class="tab" data-view="month" onclick="setView('month')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+        <rect x=".5" y="2.5" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.1"/>
+        <path d="M3.5 0v3.5M9.5 0v3.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        <rect x="2.5" y="6.5" width="2" height="2" rx=".5" fill="currentColor"/>
+        <rect x="5.5" y="6.5" width="2" height="2" rx=".5" fill="currentColor"/>
+        <rect x="8.5" y="6.5" width="2" height="2" rx=".5" fill="currentColor"/>
+      </svg>
+      Month
+    </button>
+    <button class="tab" data-view="day" onclick="setView('day')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+        <path d="M1 2h11M1 6.5h8M1 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+      Day
+    </button>
+    <button class="tab" data-view="hour" onclick="setView('hour')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+        <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.1"/>
+        <path d="M6.5 3.5V6.5l2.5 1.5" stroke="currentColor" stroke-width="1.1"
+          stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Hour
+    </button>
+  </nav>
+
+  <div class="toolbar">
+    <button class="btn-outline" onclick="goNow()">Today</button>
+    <button class="btn-icon"    onclick="navigate(-1)">&#8249;</button>
+    <button class="btn-icon"    onclick="navigate(1)">&#8250;</button>
+    <div class="nav-heading">
+      <div class="nav-title" id="nav-title">—</div>
+      <div class="nav-sub"   id="nav-sub"></div>
+    </div>
+    <span class="drag-hint" id="drag-hint">Drag to mark</span>
+  </div>
+
+  <div class="card" id="cal"></div>
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   CRYPTO
+══════════════════════════════════════ */
+const Crypt = {
+  enc: new TextEncoder(),
+  dec: new TextDecoder(),
+
+  rndHex(n) {
+    return Array.from(crypto.getRandomValues(new Uint8Array(n)))
+      .map(b => b.toString(16).padStart(2,'0')).join('');
+  },
+
+  async hashPass(pass, saltHex) {
+    const km = await crypto.subtle.importKey('raw', this.enc.encode(pass), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits(
+      { name:'PBKDF2', salt: this._hex2buf(saltHex), iterations: 150000, hash:'SHA-256' }, km, 256);
+    return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  },
+
+  async _deriveKey(pass, saltBytes, usages) {
+    const ua = Array.isArray(usages) ? usages : [usages];
+    const km = await crypto.subtle.importKey('raw', this.enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name:'PBKDF2', salt: saltBytes, iterations: 150000, hash:'SHA-256' },
+      km, { name:'AES-GCM', length:256 }, false, ua);
+  },
+
+  async deriveSessionKey(pass, saltHex) {
+    return this._deriveKey(pass, this._hex2buf(saltHex), ['encrypt','decrypt']);
+  },
+
+  async encrypt(data, pass, saltHex) {
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const key = await this._deriveKey(pass, this._hex2buf(saltHex), 'encrypt');
+    const ct  = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, this.enc.encode(JSON.stringify(data)));
+    return this._buf2hex(iv) + ':' + this._buf2hex(new Uint8Array(ct));
+  },
+
+  async decrypt(str, pass, saltHex) {
+    const [ivHex, ctHex] = str.split(':');
+    const key   = await this._deriveKey(pass, this._hex2buf(saltHex), 'decrypt');
+    const plain = await crypto.subtle.decrypt(
+      { name:'AES-GCM', iv: this._hex2buf(ivHex) }, key, this._hex2buf(ctHex));
+    return JSON.parse(this.dec.decode(plain));
+  },
+
+  _hex2buf(hex) { return new Uint8Array(hex.match(/.{2}/g).map(h=>parseInt(h,16))); },
+  _buf2hex(buf) { return Array.from(buf).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+};
+
+/* ══════════════════════════════════════
+   STORAGE
+══════════════════════════════════════ */
+const DB = {
+  getUsers()     { return JSON.parse(localStorage.getItem('tk_users')   || '[]'); },
+  saveUsers(u)   { localStorage.setItem('tk_users', JSON.stringify(u)); },
+  getSession()   { return JSON.parse(localStorage.getItem('tk_session') || 'null'); },
+  saveSession(s) { localStorage.setItem('tk_session', JSON.stringify(s)); },
+  clearSession() { localStorage.removeItem('tk_session'); }
+};
+
+/* ══════════════════════════════════════
+   AUTH STATE
+══════════════════════════════════════ */
+let _pass       = null;
+let _regEmail   = null;
+let _session    = null;
+let _sessionKey = null;
+
+/* ══════════════════════════════════════
+   PROFILE HELPERS
+══════════════════════════════════════ */
+function uid() {
+  return (crypto.randomUUID ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2));
+}
+
+const PALETTE = ['#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#3b82f6','#8b5cf6','#ec4899'];
+
+function defaultCategories(type) {
+  if (type === 'child') return [
+    { id: uid(), label: 'Tests & Exams',          color: '#ef4444' },
+    { id: uid(), label: 'School',                  color: '#eab308' },
+    { id: uid(), label: 'After-school Activities', color: '#22c55e' },
+    { id: uid(), label: 'Special Events',          color: '#3b82f6' },
+    { id: uid(), label: 'Other Classes',           color: '#8b5cf6' }
+  ];
+  return [
+    { id: uid(), label: 'Work & Meetings', color: '#3b82f6' },
+    { id: uid(), label: 'Deadlines',       color: '#ef4444' },
+    { id: uid(), label: 'Personal Time',   color: '#22c55e' },
+    { id: uid(), label: 'Events',          color: '#8b5cf6' },
+    { id: uid(), label: 'Other',           color: '#eab308' }
+  ];
+}
+
+function ensureProfile(profile) {
+  let changed = false;
+  if (!profile.categories) { profile.categories = defaultCategories(profile.type || 'adult'); changed = true; }
+  if (!profile.markings)   { profile.markings   = []; changed = true; }
+  return changed;
+}
+
+function _schoolYearRange(profile) {
+  const startMo  = (profile.schoolYearStart?.month ?? 9) - 1;
+  const startDay = profile.schoolYearStart?.day   ?? 1;
+  const endMo    = (profile.schoolYearEnd?.month  ?? 6) - 1;
+  const endDay   = profile.schoolYearEnd?.day     ?? 30;
+  const crossYear = endMo < startMo;
+  const today = new Date();
+  const yr = today.getMonth() >= startMo ? today.getFullYear() : today.getFullYear() - 1;
+  return { startMo, startDay, endMo, endDay, crossYear, yr };
+}
+
+function _dk(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function generateSchoolMarkings(profile) {
+  const schoolCat = (profile.categories || []).find(c => c.label === 'School');
+  if (!schoolCat) return;
+  const { startMo, startDay, endMo, endDay, crossYear, yr } = _schoolYearRange(profile);
+  const existing = new Set((profile.markings || []).filter(m => m.catId === schoolCat.id).map(m => m.dateStart));
+  for (let offset = 0; offset < 2; offset++) {
+    const y   = yr + offset;
+    const s   = new Date(y, startMo, startDay);
+    const end = crossYear ? new Date(y + 1, endMo, endDay) : new Date(y, endMo, endDay);
+    for (const d = new Date(s); d <= end; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() >= 1 && d.getDay() <= 5) {
+        const dk = _dk(d);
+        if (!existing.has(dk)) { profile.markings.push({ id: uid(), catId: schoolCat.id, note: '', dateStart: dk, dateEnd: dk }); existing.add(dk); }
+      }
+    }
+  }
+  profile.schoolGenerated = yr;
+}
+
+function generateClassMarkings(profile, className, weekday) {
+  let cat = (profile.categories || []).find(c => c.label === className);
+  if (!cat) {
+    cat = { id: uid(), label: className, color: '#8b5cf6' };
+    profile.categories.push(cat);
+  }
+  const { startMo, startDay, endMo, endDay, crossYear, yr } = _schoolYearRange(profile);
+  const existing = new Set(profile.markings.filter(m => m.catId === cat.id).map(m => m.dateStart));
+  for (let offset = 0; offset < 2; offset++) {
+    const y   = yr + offset;
+    const s   = new Date(y, startMo, startDay);
+    const end = crossYear ? new Date(y + 1, endMo, endDay) : new Date(y, endMo, endDay);
+    for (const d = new Date(s); d <= end; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() === weekday) {
+        const dk = _dk(d);
+        if (!existing.has(dk)) { profile.markings.push({ id: uid(), catId: cat.id, note: '', dateStart: dk, dateEnd: dk }); existing.add(dk); }
+      }
+    }
+  }
+}
+
+function generateBirthdayMarkings(profile, month, day) {
+  let cat = (profile.categories || []).find(c => c.label === 'Birthday');
+  if (!cat) {
+    cat = { id: uid(), label: 'Birthday', color: '#ec4899' };
+    profile.categories.push(cat);
+  }
+  profile.birthday = { month, day };
+  const today = new Date();
+  for (let y = today.getFullYear(); y <= today.getFullYear() + 4; y++) {
+    const dk = `${y}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    if (!profile.markings.find(m => m.catId === cat.id && m.dateStart === dk))
+      profile.markings.push({ id: uid(), catId: cat.id, note: 'Happy Birthday!', dateStart: dk, dateEnd: dk });
+  }
+}
+
+async function saveProfileFast(profile) {
+  if (!_session) return;
+  _session.profile = profile;
+  DB.saveSession(_session);
+  if (!_sessionKey) return;
+  const users = DB.getUsers();
+  const user  = users.find(u => u.email === _session.email);
+  if (!user) return;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt(
+    { name:'AES-GCM', iv }, _sessionKey, Crypt.enc.encode(JSON.stringify(profile)));
+  user.encData = Crypt._buf2hex(iv) + ':' + Crypt._buf2hex(new Uint8Array(ct));
+  DB.saveUsers(users);
+}
+
+/* ══════════════════════════════════════
+   AUTH FUNCTIONS
+══════════════════════════════════════ */
+async function doRegister(email, pass) {
+  const users = DB.getUsers();
+  if (users.find(u => u.email === email.toLowerCase()))
+    return { error: 'An account with that email already exists.' };
+  const passSalt = Crypt.rndHex(16);
+  const encSalt  = Crypt.rndHex(16);
+  const passHash = await Crypt.hashPass(pass, passSalt);
+  const encData  = await Crypt.encrypt({}, pass, encSalt);
+  users.push({ email: email.toLowerCase(), passHash, passSalt, encSalt, encData });
+  DB.saveUsers(users);
+  return { ok: true };
+}
+
+async function doSignIn(email, pass) {
+  const users = DB.getUsers();
+  const user  = users.find(u => u.email === email.toLowerCase());
+  if (!user) return { error: 'No account found with that email.' };
+  const hash = await Crypt.hashPass(pass, user.passSalt);
+  if (hash !== user.passHash) return { error: 'Incorrect password.' };
+  _sessionKey = await Crypt.deriveSessionKey(pass, user.encSalt);
+  const profile = await Crypt.decrypt(user.encData, pass, user.encSalt);
+  return { ok: true, profile, email: user.email };
+}
+
+/* ══════════════════════════════════════
+   UI HELPERS
+══════════════════════════════════════ */
+function setContent(html) {
+  const c = document.getElementById('launch-content');
+  c.innerHTML = html;
+  c.className = 'l-fade';
+}
+
+function setBtnLoading(id, on) {
+  const b = document.getElementById(id);
+  if (!b) return;
+  b.disabled = on;
+  if (on) b.innerHTML = '<span class="spinner"></span>';
+  else    b.textContent = b.dataset.lbl || b.textContent;
+}
+
+function fieldErr(id, show) { document.getElementById(id)?.classList.toggle('err', show); }
+function formErr(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle('show', !!msg);
+}
+
+/* ══════════════════════════════════════
+   LAUNCH PANELS
+══════════════════════════════════════ */
+function showPanel(name) {
+  if (name === 'welcome') {
+    const today = new Date();
+    setContent(`
+      <div class="launch-art">
+        <div class="la-ring"></div>
+        <div class="la-card">
+          <div class="la-card-top">
+            <div class="la-card-month">${today.toLocaleDateString('en-US',{month:'short',year:'numeric'})}</div>
+            <div class="la-card-day">${today.getDate()}</div>
+          </div>
+          <div class="la-card-grid">${buildMiniCells(today)}</div>
+        </div>
+      </div>
+      <div class="launch-wordmark">Time<span>Keeper</span></div>
+      <div class="launch-tagline">Your time, beautifully organised.</div>
+      <div class="l-divider"></div>
+      <div class="l-actions">
+        <button class="btn-lg-p" onclick="showPanel('register')">Create an account</button>
+        <button class="btn-lg-s" onclick="showPanel('signin')">Sign in</button>
+      </div>
+      <div class="l-footer">By continuing you agree to our Terms &amp; Privacy Policy.</div>`);
+    return;
+  }
+
+  if (name === 'register') {
+    setContent(`
+      <button class="auth-back" onclick="showPanel('welcome')">&#8592; Back</button>
+      <div class="auth-heading">Create account</div>
+      <div class="auth-sub">Takes less than a minute</div>
+      <div class="auth-form">
+        <div class="form-err" id="reg-err"></div>
+        <div class="field" id="f-email">
+          <label>Email</label>
+          <input id="r-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+          <div class="field-err">Enter a valid email address.</div>
+        </div>
+        <div class="field" id="f-pass">
+          <label>Password</label>
+          <input id="r-pass" type="password" placeholder="Min. 8 characters" autocomplete="new-password"/>
+          <div class="field-err">Password must be at least 8 characters.</div>
+        </div>
+        <div class="field" id="f-pass2">
+          <label>Confirm Password</label>
+          <input id="r-pass2" type="password" placeholder="Repeat password" autocomplete="new-password"
+                 onkeydown="if(event.key==='Enter')submitRegister()"/>
+          <div class="field-err">Passwords do not match.</div>
+        </div>
+        <button class="btn-lg-p" id="reg-btn" data-lbl="Create account" onclick="submitRegister()" style="margin-top:4px">Create account</button>
+      </div>
+      <div class="auth-switch">Already have an account? <button onclick="showPanel('signin')">Sign in</button></div>`);
+    setTimeout(() => document.getElementById('r-email')?.focus(), 50);
+    return;
+  }
+
+  if (name === 'signin') {
+    setContent(`
+      <button class="auth-back" onclick="showPanel('welcome')">&#8592; Back</button>
+      <div class="auth-heading">Welcome back</div>
+      <div class="auth-sub">Sign in to continue</div>
+      <div class="auth-form">
+        <div class="form-err" id="si-err"></div>
+        <div class="field" id="f-si-email">
+          <label>Email</label>
+          <input id="si-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+          <div class="field-err">Enter a valid email address.</div>
+        </div>
+        <div class="field" id="f-si-pass">
+          <label>Password</label>
+          <input id="si-pass" type="password" placeholder="••••••••" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter')submitSignIn()"/>
+          <div class="field-err">Password is required.</div>
+        </div>
+        <button class="btn-lg-p" id="si-btn" data-lbl="Sign in" onclick="submitSignIn()" style="margin-top:4px">Sign in</button>
+      </div>
+      <div class="auth-switch">No account? <button onclick="showPanel('register')">Create one</button></div>`);
+    setTimeout(() => document.getElementById('si-email')?.focus(), 50);
+    return;
+  }
+}
+
+/* ══════════════════════════════════════
+   FORM SUBMISSIONS
+══════════════════════════════════════ */
+async function submitRegister() {
+  const email = document.getElementById('r-email')?.value.trim()  || '';
+  const pass  = document.getElementById('r-pass')?.value          || '';
+  const pass2 = document.getElementById('r-pass2')?.value         || '';
+  let ok = true;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  fieldErr('f-email', !emailOk);       if (!emailOk)      ok = false;
+  fieldErr('f-pass',  pass.length < 8); if (pass.length < 8) ok = false;
+  fieldErr('f-pass2', pass !== pass2);  if (pass !== pass2)  ok = false;
+  if (!ok) return;
+  formErr('reg-err', '');
+  setBtnLoading('reg-btn', true);
+  const res = await doRegister(email, pass);
+  if (res.error) { setBtnLoading('reg-btn', false); formErr('reg-err', res.error); return; }
+  _pass     = pass;
+  _regEmail = email.toLowerCase();
+  // Derive session key now so _finishPersona can use saveProfileFast
+  const user = DB.getUsers().find(u => u.email === _regEmail);
+  if (user) _sessionKey = await Crypt.deriveSessionKey(pass, user.encSalt);
+  showPersonalize(0, {});
+}
+
+async function submitSignIn() {
+  const email = document.getElementById('si-email')?.value.trim() || '';
+  const pass  = document.getElementById('si-pass')?.value         || '';
+  let ok = true;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  fieldErr('f-si-email', !emailOk); if (!emailOk) ok = false;
+  fieldErr('f-si-pass',  !pass);    if (!pass)    ok = false;
+  if (!ok) return;
+  formErr('si-err', '');
+  setBtnLoading('si-btn', true);
+  const res = await doSignIn(email, pass);
+  if (res.error) { setBtnLoading('si-btn', false); formErr('si-err', res.error); return; }
+  if (!res.profile.type) {
+    _pass = pass; _regEmail = res.email;
+    showPersonalize(0, res.profile);
+  } else {
+    enterApp({ email: res.email, profile: res.profile });
+  }
+}
+
+/* ══════════════════════════════════════
+   PERSONALIZATION WIZARD
+══════════════════════════════════════ */
+const STEPS = [
+  {
+    key: 'name', type: 'text',
+    q: "What should we call you?",
+    sub: "Totally optional — you can skip this.",
+    placeholder: "Your name...", btn: "Continue"
+  },
+  {
+    key: 'type', type: 'choice',
+    q: "Who's using TimeKeeper?",
+    sub: "We'll personalise things just for you.",
+    btn: "Continue",
+    options: [
+      { value: 'child', label: 'A Kid', desc: 'Student or young learner',
+        icon: `<svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="11" cy="7" r="4" stroke="#4f46e5" stroke-width="1.6"/>
+          <path d="M4 19c0-3.866 3.134-7 7-7h0c3.866 0 7 3.134 7 7" stroke="#4f46e5" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M15 3l1.5-1.5M7 3L5.5 1.5M11 2V0" stroke="#4f46e5" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>` },
+      { value: 'adult', label: 'A Grown-up', desc: 'Professional or adult',
+        icon: `<svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="11" cy="7" r="4" stroke="#4f46e5" stroke-width="1.6"/>
+          <path d="M4 19c0-3.866 3.134-7 7-7h0c3.866 0 7 3.134 7 7" stroke="#4f46e5" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M8 11.5l1 1 2.5-2.5" stroke="#4f46e5" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>` }
+    ]
+  },
+  {
+    key: 'timeFormat', type: 'choice',
+    q: "How do you prefer to read time?",
+    sub: "You can change this anytime in Settings.",
+    btn: "All done",
+    options: [
+      { value: '12h', label: '12-hour', desc: '2:30 PM',
+        icon: `<svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="11" cy="11" r="8.5" stroke="#4f46e5" stroke-width="1.6"/>
+          <path d="M11 6v5l3 2" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>` },
+      { value: '24h', label: '24-hour', desc: '14:30',
+        icon: `<svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="11" cy="11" r="8.5" stroke="#4f46e5" stroke-width="1.6"/>
+          <path d="M11 4v7l-3 3" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>` }
+    ]
+  }
+];
+
+let _pData = {}, _pStepIdx = 0;
+
+function showPersonalize(stepIdx, existingData) {
+  _pData = { ...existingData };
+  _pStepIdx = stepIdx;
+  _renderPersonaStep(stepIdx);
+}
+
+function _renderPersonaStep(i) {
+  const step = STEPS[i];
+  const dots = STEPS.map((_,di) => {
+    const cls = di < i ? 'done' : di === i ? 'active' : 'future';
+    return `<div class="pp-d ${cls}"></div>`;
+  }).join('');
+
+  let body = '';
+  if (step.type === 'text') {
+    body = `<input class="persona-input" id="p-input" type="text"
+              placeholder="${step.placeholder}" value="${_pData[step.key]||''}"
+              onkeydown="if(event.key==='Enter')personaNext()"/>`;
+  } else {
+    body = `<div class="choice-grid">${step.options.map(opt => `
+      <div class="choice-card${_pData[step.key]===opt.value?' sel':''}" id="cc-${opt.value}"
+           onclick="personaChoose('${opt.value}')">
+        <div class="cc-icon">${opt.icon}</div>
+        <div class="cc-label">${opt.label}</div>
+        <div class="cc-desc">${opt.desc}</div>
+      </div>`).join('')}</div>`;
+  }
+
+  setContent(`
+    <div class="persona-wrap">
+      <div class="persona-top">
+        <div class="pp">${dots}</div>
+        <button class="persona-skip" onclick="personaSkip()">Skip setup</button>
+      </div>
+      <div class="persona-q">${step.q}</div>
+      <div class="persona-sub">${step.sub}</div>
+      ${body}
+      <div class="persona-actions">
+        <button class="btn-lg-p" id="p-next-btn" data-lbl="${step.btn}" onclick="personaNext()">${step.btn} &#8594;</button>
+      </div>
+    </div>`);
+
+  if (step.type === 'text') setTimeout(() => document.getElementById('p-input')?.focus(), 50);
+}
+
+function personaChoose(value) {
+  STEPS[_pStepIdx].key && (_pData[STEPS[_pStepIdx].key] = value);
+  document.querySelectorAll('.choice-card').forEach(c => c.classList.remove('sel'));
+  document.getElementById(`cc-${value}`)?.classList.add('sel');
+  setTimeout(() => personaNext(), 280);
+}
+
+async function personaNext() {
+  const step = STEPS[_pStepIdx];
+  if (step.type === 'text') {
+    const val = document.getElementById('p-input')?.value.trim() || '';
+    if (val) _pData[step.key] = val;
+  }
+  if (_pStepIdx < STEPS.length - 1) {
+    _pStepIdx++;
+    _renderPersonaStep(_pStepIdx);
+  } else {
+    await _finishPersona();
+  }
+}
+
+async function personaSkip() { await _finishPersona(); }
+
+async function _finishPersona() {
+  const btn = document.getElementById('p-next-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+
+  const base = _session?.profile || {};
+  const type = _pData.type || base.type || 'adult';
+  const profile = {
+    name:       _pData.name       || base.name       || null,
+    type,
+    timeFormat: _pData.timeFormat || base.timeFormat || '12h',
+    categories: base.categories   || defaultCategories(type),
+    markings:   base.markings     || []
+  };
+
+  _session = { email: _regEmail, profile };
+  await saveProfileFast(profile);
+  _pass = null;
+  if (type === 'child') {
+    showSchoolSetup();
+  } else {
+    enterApp(_session);
+  }
+}
+
+/* ══════════════════════════════════════
+   SCHOOL SETUP WIZARD
+══════════════════════════════════════ */
+let _sw = null; // wizard state
+
+function showSchoolSetup() {
+  _sw = { classes: [], currentClass: null };
+  _swStep('welcome');
+}
+
+function _swMo(id, val) {
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return `<select id="${id}" class="sw-select">${names.map((n,i)=>`<option value="${i+1}"${(i+1)===val?' selected':''}>${n}</option>`).join('')}</select>`;
+}
+function _swDay(id, val) {
+  return `<select id="${id}" class="sw-select">${Array.from({length:31},(_,i)=>`<option value="${i+1}"${(i+1)===val?' selected':''}>${i+1}</option>`).join('')}</select>`;
+}
+function _swGet(id) { return parseInt(document.getElementById(id)?.value ?? 0); }
+
+function _swStep(step) {
+  switch (step) {
+    case 'welcome':    return _swWelcome();
+    case 'sch-dates':  return _swSchDates();
+    case 'has-class':  return _swHasClass();
+    case 'cls-name':   return _swClsName();
+    case 'cls-day':    return _swClsDay();
+    case 'more-cls':   return _swMoreCls();
+    case 'birthday':   return _swBirthday();
+    case 'done':       return _swDone();
+  }
+}
+
+function _swWelcome() {
+  setContent(`
+    <div class="sw-icon">&#127890;</div>
+    <div class="persona-q">Let's get set up!</div>
+    <div class="persona-sub">We'll personalise TimeKeeper for your school year.</div>
+    <div class="sw-divider"></div>
+    <div class="persona-actions">
+      <button class="btn-lg-p" onclick="_swStep('sch-dates')">Let's go &#8594;</button>
+    </div>`);
+}
+
+function _swSchDates() {
+  const p = _session.profile;
+  const sm = p.schoolYearStart?.month ?? 9,  sd = p.schoolYearStart?.day ?? 1;
+  const em = p.schoolYearEnd?.month   ?? 6,  ed = p.schoolYearEnd?.day  ?? 30;
+  setContent(`
+    <div class="persona-q" style="font-size:1.15rem">When does your school year run?</div>
+    <div class="persona-sub">Pick your first and last day of school.</div>
+    <div class="sw-date-block">
+      <div class="sw-date-row"><span class="sw-date-label">Starts</span>${_swMo('sw-sm',sm)} ${_swDay('sw-sd',sd)}</div>
+      <div class="sw-date-row"><span class="sw-date-label">Ends</span>${_swMo('sw-em',em)} ${_swDay('sw-ed',ed)}</div>
+    </div>
+    <div class="persona-actions">
+      <button class="btn-lg-p" onclick="_swSaveSchDates()">Continue &#8594;</button>
+    </div>`);
+}
+
+function _swSaveSchDates() {
+  const p = _session.profile;
+  p.schoolYearStart = { month: _swGet('sw-sm'), day: _swGet('sw-sd') };
+  p.schoolYearEnd   = { month: _swGet('sw-em'), day: _swGet('sw-ed') };
+  generateSchoolMarkings(p);
+  saveProfileFast(p).catch(() => {});
+  _swStep('has-class');
+}
+
+function _swHasClass() {
+  setContent(`
+    <div class="persona-q" style="font-size:1.15rem">Do you have any special classes?</div>
+    <div class="persona-sub">Like music, sports, or art — classes that aren't every day.</div>
+    <div class="sw-divider"></div>
+    <div class="persona-actions">
+      <button class="btn-lg-p" onclick="_swStep('cls-name')">Yes, I do!</button>
+      <button class="btn-lg-s" onclick="_swStep('birthday')">No thanks</button>
+    </div>`);
+}
+
+function _swClsName() {
+  _sw.currentClass = { name: '', weekdays: [] };
+  setContent(`
+    <div class="persona-q" style="font-size:1.15rem">What's the class called?</div>
+    <div class="persona-sub">Enter the name of your special class.</div>
+    <input class="persona-input" id="sw-cname" type="text" placeholder="e.g. Piano, Swimming, Art..."
+           onkeydown="if(event.key==='Enter')_swSaveClsName()"/>
+    <div class="sw-hint" id="sw-hint"></div>
+    <div class="persona-actions">
+      <button class="btn-lg-p" onclick="_swSaveClsName()">Continue &#8594;</button>
+    </div>`);
+  setTimeout(() => document.getElementById('sw-cname')?.focus(), 50);
+}
+
+function _swSaveClsName() {
+  const name = document.getElementById('sw-cname')?.value.trim() || '';
+  if (!name) { document.getElementById('sw-hint').textContent = 'Please enter a class name.'; return; }
+  _sw.currentClass.name = name;
+  _swStep('cls-day');
+}
+
+function _swClsDay() {
+  const name = _sw.currentClass.name;
+  const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dows   = [1, 2, 3, 4, 5, 6, 0];
+  const btns = labels.map((lbl, i) => {
+    const dow = dows[i];
+    const sel = _sw.currentClass.weekdays.includes(dow);
+    return `<button class="sw-day-btn${sel?' sel':''}" onclick="_swToggleDay(${dow},this)">${lbl}</button>`;
+  }).join('');
+  setContent(`
+    <div class="persona-q" style="font-size:1.15rem">When is ${name}?</div>
+    <div class="persona-sub">Tap every day of the week it happens.</div>
+    <div class="sw-day-row">${btns}</div>
+    <div class="sw-hint" id="sw-hint"></div>
+    <div class="persona-actions">
+      <button class="btn-lg-p" onclick="_swSaveClsDay()">Continue &#8594;</button>
+    </div>`);
+}
+
+function _swToggleDay(dow, btn) {
+  const wd = _sw.currentClass.weekdays;
+  const i = wd.indexOf(dow);
+  if (i >= 0) { wd.splice(i, 1); btn.classList.remove('sel'); }
+  else        { wd.push(dow);    btn.classList.add('sel'); }
+  document.getElementById('sw-hint').textContent = '';
+}
+
+function _swSaveClsDay() {
+  if (!_sw.currentClass.weekdays.length) {
+    document.getElementById('sw-hint').textContent = 'Please pick at least one day.';
+    return;
+  }
+  const p = _session.profile;
+  const { name, weekdays } = _sw.currentClass;
+  weekdays.forEach(dow => generateClassMarkings(p, name, dow));
+  saveProfileFast(p).catch(() => {});
+  _sw.classes.push({ name, weekdays: [...weekdays] });
+  _sw.currentClass = null;
+  _swStep('more-cls');
+}
+
+function _swMoreCls() {
+  const added = _sw.classes.map(c => c.name).join(', ');
+  setContent(`
+    <div class="persona-q" style="font-size:1.15rem">Any more special classes?</div>
+    <div class="sw-added">Added so far: ${added}</div>
+    <div class="sw-divider"></div>
+    <div class="persona-actions">
+      <button class="btn-lg-p" onclick="_swStep('cls-name')">Yes, add another</button>
+      <button class="btn-lg-s" onclick="_swStep('birthday')">No, that's all</button>
+    </div>`);
+}
+
+function _swBirthday() {
+  setContent(`
+    <div class="sw-icon">&#127874;</div>
+    <div class="persona-q" style="font-size:1.15rem">When's your birthday?</div>
+    <div class="persona-sub">We'll mark it in your calendar every year!</div>
+    <div class="sw-date-block" style="margin-top:20px">
+      <div class="sw-date-row" style="justify-content:center">${_swMo('sw-bm',1)} ${_swDay('sw-bd',1)}</div>
+    </div>
+    <div class="persona-actions">
+      <button class="btn-lg-p" onclick="_swSaveBirthday()">Continue &#8594;</button>
+      <button class="btn-lg-s" onclick="_swStep('done')">Skip</button>
+    </div>`);
+}
+
+function _swSaveBirthday() {
+  generateBirthdayMarkings(_session.profile, _swGet('sw-bm'), _swGet('sw-bd'));
+  saveProfileFast(_session.profile).catch(() => {});
+  _swStep('done');
+}
+
+function _swDone() {
+  const classCount = _sw.classes.length;
+  const sub = classCount
+    ? `School days and ${classCount} special class${classCount>1?'es':''} are all set.`
+    : 'Your school year is ready in TimeKeeper.';
+  setContent(`
+    <div class="sw-icon">&#127881;</div>
+    <div class="persona-q">You're all set!</div>
+    <div class="persona-sub">${sub}</div>
+    <div class="sw-divider"></div>
+    <div class="persona-actions">
+      <button class="btn-lg-p" onclick="enterApp(_session)">Open TimeKeeper &#8594;</button>
+    </div>`);
+}
+
+/* ══════════════════════════════════════
+   ENTER APP
+══════════════════════════════════════ */
+function enterApp(session) {
+  _session = session;
+  _session.profile = _session.profile || {};
+  let changed = ensureProfile(_session.profile);
+  const p = _session.profile;
+  const curSchoolYr = new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  if (p.type === 'child' && p.schoolGenerated !== curSchoolYr) {
+    generateSchoolMarkings(p);
+    changed = true;
+  }
+  if (changed) {
+    DB.saveSession(_session);
+    if (_sessionKey) saveProfileFast(_session.profile).catch(() => {});
+  }
+  applyPrefs(_session.profile);
+  updateUserPill(_session);
+  document.getElementById('gear-btn').classList.add('visible');
+  const el = document.getElementById('launch');
+  el.classList.add('hide');
+  setTimeout(() => el.remove(), 520);
+}
+
+function applyPrefs(profile) {
+  if (!profile) return;
+  document.body.classList.toggle('child-mode', profile.type === 'child');
+  _timeFormat = profile.timeFormat || '12h';
+}
+
+function updateUserPill(session) {
+  const pill = document.getElementById('user-pill');
+  if (!session) { pill.style.display = 'none'; return; }
+  const name = session.profile?.name || session.email.split('@')[0];
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  pill.style.display = 'flex';
+  pill.innerHTML = `
+    <div class="user-avatar">${initials}</div>
+    <div class="user-name">${name.split(' ')[0]}</div>
+    <button class="btn-signout" onclick="signOut()">Sign out</button>`;
+}
+
+function signOut() { DB.clearSession(); location.reload(); }
+
+/* ══════════════════════════════════════
+   SETTINGS PANEL
+══════════════════════════════════════ */
+function openSettings() {
+  renderSettingsPanel();
+  document.getElementById('settings-panel').classList.add('open');
+  document.getElementById('settings-overlay').style.display = 'block';
+}
+
+function closeSettings() {
+  document.getElementById('settings-panel').classList.remove('open');
+  document.getElementById('settings-overlay').style.display = 'none';
+}
+
+function renderSettingsPanel() {
+  const profile = _session?.profile || {};
+  const cats    = profile.categories || [];
+
+  document.getElementById('sp-body').innerHTML = `
+    <div class="sp-section">
+      <div class="sp-section-title">Profile</div>
+      <div class="sp-field">
+        <label>Display name</label>
+        <input id="sp-name" type="text" class="sp-input" value="${profile.name || ''}" placeholder="Your name"/>
+      </div>
+      <div class="sp-field">
+        <label>Who are you?</label>
+        <div class="sp-choice-row">
+          <button class="sp-choice-btn${profile.type !== 'child' ? ' sel' : ''}" onclick="spSetType('adult')">Grown-up</button>
+          <button class="sp-choice-btn${profile.type === 'child' ? ' sel' : ''}" onclick="spSetType('child')">Kid</button>
+        </div>
+      </div>
+      <div class="sp-field">
+        <label>Time format</label>
+        <div class="sp-choice-row">
+          <button class="sp-choice-btn${profile.timeFormat !== '24h' ? ' sel' : ''}" onclick="spSetTimeFormat('12h')">12-hour</button>
+          <button class="sp-choice-btn${profile.timeFormat === '24h' ? ' sel' : ''}" onclick="spSetTimeFormat('24h')">24-hour</button>
+        </div>
+      </div>
+      <button class="sp-save-btn" id="sp-save-btn" onclick="saveSettingsProfile()">Save Profile</button>
+    </div>
+    <div class="sp-section">
+      <div class="sp-section-title">Marking Categories</div>
+      <div id="sp-cats">${cats.map(c => renderCatRow(c)).join('')}</div>
+      <button class="sp-add-cat-btn" onclick="addCategory()">+ Add Category</button>
+    </div>`;
+}
+
+function renderCatRow(cat) {
+  const swatches = PALETTE.map(c => {
+    const sel = cat.color === c ? ' sel' : '';
+    return `<div class="pal-swatch${sel}" style="background:${c}" data-color="${c}"
+                 onclick="setCatColor('${cat.id}','${c}')"></div>`;
+  }).join('');
+  return `
+    <div class="sp-cat-row" id="scat-${cat.id}">
+      <div class="sp-cat-top">
+        <input class="sp-cat-input" type="text" value="${cat.label}"
+               onchange="renameCat('${cat.id}',this.value)"
+               onblur="renameCat('${cat.id}',this.value)"/>
+        <button class="sp-cat-del" onclick="deleteCategory('${cat.id}')" title="Remove">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="pal-row">${swatches}</div>
+    </div>`;
+}
+
+function spSetType(type) {
+  if (!_session?.profile) return;
+  const profile = _session.profile;
+  profile.type = type;
+  if (type === 'child') {
+    const curSchoolYr = new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+    if (profile.schoolGenerated !== curSchoolYr) {
+      generateSchoolMarkings(profile);
+      saveProfileFast(profile).catch(() => {});
+      render();
+    }
+  }
+  document.body.classList.toggle('child-mode', type === 'child');
+  renderSettingsPanel();
+}
+
+function spSetTimeFormat(f) {
+  if (!_session?.profile) return;
+  _session.profile.timeFormat = f;
+  _timeFormat = f;
+  renderSettingsPanel();
+  render();
+}
+
+async function saveSettingsProfile() {
+  const profile = _session.profile;
+  const nameVal = document.getElementById('sp-name')?.value.trim();
+  if (nameVal !== undefined) profile.name = nameVal || null;
+  await saveProfileFast(profile);
+  applyPrefs(profile);
+  updateUserPill(_session);
+  const btn = document.getElementById('sp-save-btn');
+  if (btn) { btn.textContent = 'Saved!'; setTimeout(() => { btn.textContent = 'Save Profile'; }, 1500); }
+}
+
+function renameCat(id, label) {
+  const cat = (_session?.profile?.categories || []).find(c => c.id === id);
+  if (cat && label.trim()) { cat.label = label.trim(); saveProfileFast(_session.profile).catch(()=>{}); }
+}
+
+function setCatColor(id, color) {
+  const cat = (_session?.profile?.categories || []).find(c => c.id === id);
+  if (!cat) return;
+  cat.color = color;
+  saveProfileFast(_session.profile).then(() => renderSettingsPanel()).catch(()=>{});
+  render();
+}
+
+function addCategory() {
+  const profile = _session?.profile;
+  if (!profile) return;
+  const used  = profile.categories.map(c => c.color);
+  const color = PALETTE.find(c => !used.includes(c)) || PALETTE[0];
+  profile.categories.push({ id: uid(), label: 'New Category', color });
+  saveProfileFast(profile).then(() => renderSettingsPanel()).catch(()=>{});
+}
+
+function deleteCategory(id) {
+  const profile = _session?.profile;
+  if (!profile) return;
+  showConfirm('Delete this category? Existing markings will remain but lose their colour.', () => {
+    profile.categories = profile.categories.filter(c => c.id !== id);
+    saveProfileFast(profile).then(() => { renderSettingsPanel(); render(); }).catch(()=>{});
+  });
+}
+
+/* ══════════════════════════════════════
+   MARKINGS
+══════════════════════════════════════ */
+function dateKey(y, mo, d) {
+  return `${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function getMarkingsForDate(dk) {
+  return (_session?.profile?.markings || []).filter(m => m.dateStart <= dk && m.dateEnd >= dk);
+}
+
+function getMarkingsForHour(dk, hr) {
+  return (_session?.profile?.markings || []).filter(m =>
+    m.dateStart <= dk && m.dateEnd >= dk &&
+    m.hourStart !== undefined && hr >= m.hourStart && hr <= m.hourEnd);
+}
+
+function getCatById(id) {
+  return (_session?.profile?.categories || []).find(c => c.id === id);
+}
+
+function deleteMarking(id) {
+  const profile = _session.profile;
+  profile.markings = profile.markings.filter(m => m.id !== id);
+  saveProfileFast(profile).then(() => render()).catch(()=>{});
+}
+
+function editMarking(id, e) {
+  e.stopPropagation();
+  const marking = (_session?.profile?.markings || []).find(m => m.id === id);
+  if (!marking) return;
+  _editingMarkId = id;
+  _pendingMark   = null;
+  const dateLabel = marking.dateStart === marking.dateEnd
+    ? marking.dateStart
+    : `${marking.dateStart} – ${marking.dateEnd}`;
+  _buildMarkModal({ dateLabel, catId: marking.catId, note: marking.note || '', isEdit: true });
+}
+
+function deleteEditMarking() {
+  const id = _editingMarkId;
+  closeMarkModal();
+  showConfirm('Remove this marking?', () => deleteMarking(id));
+}
+
+/* ── Drag to create markings ── */
+let _drag = { active:false, moved:false, type:null, startCell:null, endCell:null };
+let _dragJustCompleted = false;
+let _pendingMark   = null;
+let _selectedCatId = null;
+let _editingMarkId = null;
+
+function hourOpts(sel) {
+  return Array.from({length:24}, (_,h) =>
+    `<option value="${h}"${h===sel?' selected':''}>${fmt(h)}</option>`
+  ).join('');
+}
+
+let _confCallback = null;
+function showConfirm(msg, onYes, btnLabel) {
+  document.getElementById('conf-msg').textContent = msg;
+  const ok = document.getElementById('conf-ok');
+  ok.textContent = btnLabel || 'Delete';
+  ok.onclick = () => { closeConf(); onYes(); };
+  document.getElementById('conf-modal').classList.add('open');
+}
+function closeConf() { document.getElementById('conf-modal').classList.remove('open'); }
+
+document.addEventListener('mousedown', function(e) {
+  const cal = document.getElementById('cal');
+  if (!cal || !cal.contains(e.target)) return;
+  const monthCell = e.target.closest('.m-day:not(.oth)');
+  if (monthCell && monthCell.dataset.date) {
+    _drag = { active:true, moved:false, type:'month', startCell:monthCell, endCell:monthCell };
+    highlightDrag();
+    e.preventDefault();
+  }
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (!_drag.active) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = el?.closest('.m-day:not(.oth)');
+  if (cell && cell.dataset.date && cell !== _drag.endCell) {
+    _drag.moved   = true;
+    _drag.endCell = cell;
+    highlightDrag();
+  }
+});
+
+document.addEventListener('mouseup', function(e) {
+  if (!_drag.active) return;
+  _drag.active = false;
+  if (_drag.moved) {
+    _dragJustCompleted = true;
+    setTimeout(() => { _dragJustCompleted = false; }, 60);
+    showMarkingPopup();
+  } else {
+    clearDragHighlight();
+  }
+  _drag.moved = false;
+});
+
+function highlightDrag() {
+  clearDragHighlight();
+  if (!_drag.startCell || !_drag.endCell) return;
+  const d1 = new Date(_drag.startCell.dataset.date + 'T12:00:00');
+  const d2 = new Date(_drag.endCell.dataset.date   + 'T12:00:00');
+  const lo = d1 <= d2 ? d1 : d2, hi = d1 <= d2 ? d2 : d1;
+  document.querySelectorAll('.m-day[data-date]').forEach(cell => {
+    const d = new Date(cell.dataset.date + 'T12:00:00');
+    if (d >= lo && d <= hi) cell.classList.add('drag-sel');
+  });
+}
+
+function clearDragHighlight() {
+  document.querySelectorAll('.drag-sel').forEach(c => c.classList.remove('drag-sel'));
+}
+
+function showMarkingPopup() {
+  clearDragHighlight();
+  _editingMarkId = null;
+  const d1 = new Date(_drag.startCell.dataset.date + 'T12:00:00');
+  const d2 = new Date(_drag.endCell.dataset.date   + 'T12:00:00');
+  const dateStart = d1 <= d2 ? _drag.startCell.dataset.date : _drag.endCell.dataset.date;
+  const dateEnd   = d1 <= d2 ? _drag.endCell.dataset.date   : _drag.startCell.dataset.date;
+  _pendingMark = { dateStart, dateEnd };
+  const dateLabel = dateStart === dateEnd ? dateStart : `${dateStart} – ${dateEnd}`;
+  _buildMarkModal({ dateLabel, catId: null, note: '', isEdit: false });
+}
+
+function _buildMarkModal({ dateLabel, catId, note, isEdit }) {
+  _selectedCatId = catId || null;
+  const cats = _session?.profile?.categories || [];
+  const catBtns = cats.map(c => {
+    const sel = catId === c.id;
+    return `<button class="cat-btn${sel?' sel':''}" data-id="${c.id}"
+               style="${sel?`border-color:${c.color}`:''}"
+               onclick="selectMarkCat('${c.id}')">
+      <span class="cat-swatch-lg" style="background:${c.color}"></span>${c.label}
+    </button>`;
+  }).join('');
+
+  document.getElementById('mm-box').innerHTML = `
+    <div class="mm-title">${isEdit ? 'Edit Marking' : 'Add Marking'}</div>
+    <div class="mm-range">${dateLabel}</div>
+    <div class="mm-label">Category</div>
+    <div class="mm-cats">${catBtns || '<span style="font-size:.8rem;color:var(--text-3)">No categories — add one in Settings.</span>'}</div>
+    <div class="mm-label">Note <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+    <textarea class="mm-note" id="mm-note" placeholder="Add a note...">${note || ''}</textarea>
+    <div class="mm-hint" id="mm-hint"></div>
+    <div class="mm-actions">
+      ${isEdit ? '<button class="mm-btn-del" onclick="deleteEditMarking()">Delete</button>' : ''}
+      <button class="mm-btn-cancel" onclick="closeMarkModal()">Cancel</button>
+      <button class="mm-btn-save" onclick="saveMarking()">Save</button>
+    </div>`;
+
+  document.getElementById('mark-modal').classList.add('open');
+}
+
+function selectMarkCat(id) {
+  _selectedCatId = id;
+  const cat = getCatById(id);
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    const sel = b.dataset.id === id;
+    b.classList.toggle('sel', sel);
+    b.style.borderColor = sel && cat ? cat.color : '';
+  });
+  document.getElementById('mm-hint').textContent = '';
+}
+
+async function saveMarking() {
+  if (!_selectedCatId) {
+    document.getElementById('mm-hint').textContent = 'Please select a category.';
+    return;
+  }
+  const note    = document.getElementById('mm-note')?.value.trim() || '';
+  const profile = _session.profile;
+
+  if (_editingMarkId) {
+    const m = profile.markings.find(m => m.id === _editingMarkId);
+    if (m) { m.catId = _selectedCatId; m.note = note; }
+  } else {
+    profile.markings.push({
+      id: uid(), catId: _selectedCatId, note,
+      dateStart: _pendingMark.dateStart, dateEnd: _pendingMark.dateEnd
+    });
+  }
+  await saveProfileFast(profile);
+  closeMarkModal();
+  render();
+}
+
+function closeMarkModal() {
+  document.getElementById('mark-modal').classList.remove('open');
+  _pendingMark   = null;
+  _selectedCatId = null;
+  _editingMarkId = null;
+}
+
+/* ══════════════════════════════════════
+   CALENDAR STATE
+══════════════════════════════════════ */
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+const MSHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DLONG  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+let view        = 'year';
+let now         = new Date();
+let cursor      = new Date();
+let _timeFormat = '12h';
+
+document.getElementById('tz-str').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/* ══════════════════════════════════════
+   INIT LAUNCH
+══════════════════════════════════════ */
+(function init() {
+  const s = DB.getSession();
+  if (s) { enterApp(s); } else { showPanel('welcome'); }
+})();
+
+/* ══════════════════════════════════════
+   CALENDAR UTILS
+══════════════════════════════════════ */
+function buildMiniCells(today) {
+  const y=today.getFullYear(), mo=today.getMonth(), d=today.getDate();
+  const fd=new Date(y,mo,1).getDay(), dim=new Date(y,mo+1,0).getDate();
+  let r='';
+  for (let i=0;i<fd;i++)    r+='<div class="la-c off"></div>';
+  for (let n=1;n<=Math.min(dim,35-fd);n++) r+=`<div class="la-c ${n===d?'hi':'on'}"></div>`;
+  while ((r.match(/la-c/g)||[]).length<35) r+='<div class="la-c off"></div>';
+  return r;
+}
+
+/* ══════════════════════════════════════
+   CALENDAR
+══════════════════════════════════════ */
+function tick() {
+  now = new Date();
+  document.getElementById('live-clock').textContent =
+    now.toLocaleTimeString('en-US', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  document.getElementById('live-date').textContent =
+    now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+  if (view === 'hour') liveHour();
+}
+setInterval(tick, 1000);
+tick();
+
+function setView(v) {
+  view = v;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
+  const hint = document.getElementById('drag-hint');
+  if (hint) hint.classList.toggle('show', v === 'month');
+  render();
+}
+
+function navigate(d) {
+  switch (view) {
+    case 'year':  cursor.setFullYear(cursor.getFullYear()+d); break;
+    case 'month': cursor.setMonth(cursor.getMonth()+d);       break;
+    case 'day':   cursor.setDate(cursor.getDate()+d);         break;
+    case 'hour':  cursor.setHours(cursor.getHours()+d);       break;
+  }
+  render();
+}
+
+function goNow() { cursor = new Date(now); render(); }
+
+function render() {
+  const el = document.getElementById('cal');
+  el.innerHTML = '';
+  el.style.animation = 'none';
+  void el.offsetHeight;
+  el.style.animation = '';
+  ({ year:renderYear, month:renderMonth, day:renderDay, hour:renderHour })[view]();
+}
+
+function fmt(h, m=0) {
+  if (_timeFormat === '24h') return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  const ap = h < 12 ? 'AM' : 'PM';
+  const h1 = h===0 ? 12 : h>12 ? h-12 : h;
+  return `${h1}:${String(m).padStart(2,'0')} ${ap}`;
+}
+
+function sameDay(y,mo,d) {
+  return now.getFullYear()===y && now.getMonth()===mo && now.getDate()===d;
+}
+
+function setNav(title, sub) {
+  document.getElementById('nav-title').textContent = title;
+  document.getElementById('nav-sub').textContent   = sub || '';
+}
+
+/* ── Year ── */
+function renderYear() {
+  const y = cursor.getFullYear();
+  setNav(y, 'Click a month to open it');
+  let h = '<div class="year-grid">';
+  for (let m=0;m<12;m++) {
+    const isCur = now.getFullYear()===y && now.getMonth()===m;
+    const fd=new Date(y,m,1).getDay(), dim=new Date(y,m+1,0).getDate();
+    h+=`<div class="mini-month${isCur?' is-cur':''}" onclick="jumpMonth(${y},${m})">
+      <div class="mm-name">${MONTHS[m]}</div><div class="mm-grid">`;
+    DAYS.forEach(d=>h+=`<div class="mm-dh">${d[0]}</div>`);
+    for (let i=0;i<fd;i++) h+='<div></div>';
+    for (let d=1;d<=dim;d++) {
+      const dow=(fd+d-1)%7, wk=dow===0||dow===6, td=isCur&&d===now.getDate();
+      h+=`<div class="mm-d${td?' td':''}${wk&&!td?' wk':''}">${d}</div>`;
+    }
+    h+='</div></div>';
+  }
+  document.getElementById('cal').innerHTML = h+'</div>';
+}
+function jumpMonth(y,m) { cursor=new Date(y,m,1); setView('month'); }
+
+/* ── Month ── */
+function renderMonth() {
+  const y=cursor.getFullYear(), mo=cursor.getMonth();
+  setNav(`${MONTHS[mo]} ${y}`, 'Click a day to open it · Drag to mark');
+  const fd=new Date(y,mo,1).getDay(), dim=new Date(y,mo+1,0).getDate(), pd=new Date(y,mo,0).getDate();
+  let h='<div class="month-grid">';
+  DAYS.forEach(d=>h+=`<div class="col-h">${d}</div>`);
+
+  // Leading filler days
+  for (let i=fd-1;i>=0;i--) h+=`<div class="m-day oth"><div class="d-n">${pd-i}</div></div>`;
+
+  // Real days
+  for (let d=1;d<=dim;d++) {
+    const dow=(fd+d-1)%7, wk=dow===0||dow===6, td=sameDay(y,mo,d);
+    const dk = dateKey(y, mo, d);
+    const dayMarkings = getMarkingsForDate(dk);
+    const shown = dayMarkings.slice(0, 3);
+    const extra = dayMarkings.length > 3 ? dayMarkings.length - 3 : 0;
+    const marks = shown.map(m => {
+      const cat = getCatById(m.catId);
+      const color = cat ? cat.color : '#9ca3af';
+      const label = m.note || cat?.label || '';
+      return `<div class="m-mark" style="background:${color}"
+                   onclick="editMarking('${m.id}',event)" data-mid="${m.id}">${label}</div>`;
+    }).join('') + (extra ? `<div class="m-more">+${extra} more</div>` : '');
+    h+=`<div class="m-day${td?' td':''}${wk?' wk':''}" data-date="${dk}"
+             onclick="if(!_dragJustCompleted)jumpDay(${y},${mo},${d})">
+      <div class="d-n">${d}</div>
+      ${marks ? `<div class="m-marks">${marks}</div>` : ''}
+    </div>`;
+  }
+
+  // Trailing filler days
+  const tot=Math.ceil((fd+dim)/7)*7;
+  for (let d=1;d<=tot-fd-dim;d++) h+=`<div class="m-day oth"><div class="d-n">${d}</div></div>`;
+
+  document.getElementById('cal').innerHTML = h+'</div>';
+}
+function jumpDay(y,mo,d) { cursor=new Date(y,mo,d,now.getHours(),now.getMinutes()); setView('day'); }
+
+/* ── Day ── */
+function renderDay() {
+  const y=cursor.getFullYear(), mo=cursor.getMonth(), d=cursor.getDate();
+  const td=sameDay(y,mo,d);
+  setNav(`${DLONG[new Date(y,mo,d).getDay()]}, ${MONTHS[mo]} ${d}`,
+    td ? 'Today' : `${MONTHS[mo]} ${d}, ${y}`);
+  const dk = dateKey(y, mo, d);
+  const dayMarkings = getMarkingsForDate(dk);
+  let banner = '';
+  if (dayMarkings.length) {
+    banner = '<div class="hr-markings">' + dayMarkings.map(m => {
+      const cat = getCatById(m.catId);
+      const color = cat ? cat.color : '#9ca3af';
+      const label = cat ? cat.label + (m.note ? ' — ' + m.note : '') : '';
+      return `<div class="hr-mark-banner" style="background:${color}18;border-left-color:${color}"
+                   onclick="editMarking('${m.id}',event)">
+        <span class="hr-mark-dot" style="background:${color}"></span>${label}
+      </div>`;
+    }).join('') + '</div>';
+  }
+  let h='<div class="day-scroll">' + banner;
+  for (let hr=0;hr<24;hr++) {
+    const cur=td&&now.getHours()===hr;
+    h+=`<div class="h-row${cur?' cur':''}" id="hrow-${hr}" data-hour="${hr}"
+             onclick="if(!_dragJustCompleted)jumpHour(${y},${mo},${d},${hr})">
+      <div class="h-lbl${cur?' cur':''}">${fmt(hr)}</div>
+      <div class="h-body">
+        ${cur?'<div class="t-dot"></div><div class="t-line"></div>':''}
+      </div>
+    </div>`;
+  }
+  document.getElementById('cal').innerHTML=h+'</div>';
+  if (td) setTimeout(()=>document.getElementById(`hrow-${now.getHours()}`)?.scrollIntoView({behavior:'smooth',block:'center'}),80);
+}
+function jumpHour(y,mo,d,hr) { cursor=new Date(y,mo,d,hr,now.getMinutes()); setView('hour'); }
+
+/* ── Hour ── */
+function renderHour() {
+  const y=cursor.getFullYear(), mo=cursor.getMonth(), d=cursor.getDate(), hr=cursor.getHours();
+  const curHr=sameDay(y,mo,d)&&now.getHours()===hr;
+  setNav(`${fmt(hr)}  —  ${MSHORT[mo]} ${d}, ${y}`, curHr?'Current hour':'');
+
+  const dk = dateKey(y, mo, d);
+  const hrMarkings = getMarkingsForDate(dk);
+  let banner = '';
+  if (hrMarkings.length) {
+    banner = '<div class="hr-markings">' + hrMarkings.map(m => {
+      const cat = getCatById(m.catId);
+      const color = cat ? cat.color : '#9ca3af';
+      const label = cat ? cat.label + (m.note ? ' — ' + m.note : '') : 'Unmarked';
+      return `<div class="hr-mark-banner" style="background:${color}18;border-left-color:${color}"
+                   onclick="editMarking('${m.id}',event)">
+        <span class="hr-mark-dot" style="background:${color}"></span>${label}
+      </div>`;
+    }).join('') + '</div>';
+  }
+
+  let h='<div class="hour-scroll">' + banner;
+  for (let m=0;m<60;m++) {
+    const cm=curHr&&now.getMinutes()===m;
+    const pct=cm?(now.getSeconds()/60*100):(curHr&&m<now.getMinutes()?100:0);
+    h+=`<div class="min-row${cm?' cur':''}" id="mrow-${m}">
+      <div class="min-lbl">${fmt(hr,m)}</div>
+      <div class="min-bg"><div class="min-fill" id="mfill-${m}" style="width:${pct}%"></div></div>
+    </div>`;
+  }
+  document.getElementById('cal').innerHTML=h+'</div>';
+  if (curHr) setTimeout(()=>document.getElementById(`mrow-${now.getMinutes()}`)?.scrollIntoView({behavior:'smooth',block:'center'}),80);
+}
+
+function liveHour() {
+  const y=cursor.getFullYear(), mo=cursor.getMonth(), d=cursor.getDate(), hr=cursor.getHours();
+  if (!(sameDay(y,mo,d)&&now.getHours()===hr)) return;
+  for (let m=0;m<60;m++) {
+    const fill=document.getElementById(`mfill-${m}`), row=document.getElementById(`mrow-${m}`);
+    if (!fill||!row) return;
+    const cm=now.getMinutes()===m;
+    row.classList.toggle('cur',cm);
+    fill.style.width=cm?(now.getSeconds()/60*100)+'%':(m<now.getMinutes()?'100%':'0%');
+  }
+}
+
+render();
+</script>
+</body>
+</html>
